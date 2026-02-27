@@ -1,0 +1,315 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>IP Camera Viewer - 专业监控系统</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎥</text></svg>">
+    <link rel="stylesheet" href="/static/css/style.css?v=1772015929">
+</head>
+<body>
+    <!-- 顶部工具栏 -->
+    <header class="header">
+        <div class="header-left">
+            <h1>🎥 IP Camera Viewer</h1>
+        </div>
+        <div class="header-center">
+            <span class="stats-badge">在线: <span id="onlineCount">0</span></span>
+            <span class="stats-badge">总计: <span id="totalCount">0</span></span>
+        </div>
+        <div class="header-right">
+            <button id="scanBtn" class="btn btn-primary">
+                <svg width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
+                    <path d="M11.742 10.344a6.5 6.5 0 1 0-1.397 1.398h-.001c.03.04.062.078.098.115l3.85 3.85a1 1 0 0 0 1.415-1.414l-3.85-3.85a1.007 1.007 0 0 0-.115-.1zM12 6.5a5.5 5.5 0 1 1-11 0 5.5 5.5 0 0 1 11 0z"/>
+                </svg>
+                扫描网络
+            </button>
+            <button id="addCameraBtn" class="btn btn-secondary">
+                <svg width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
+                    <path d="M8 4a.5.5 0 0 1 .5.5v3h3a.5.5 0 0 1 0 1h-3v3a.5.5 0 0 1-1 0v-3h-3a.5.5 0 0 1 0-1h3v-3A.5.5 0 0 1 8 4z"/>
+                </svg>
+                添加
+            </button>
+            <button id="refreshBtn" class="btn btn-secondary">
+                <svg width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
+                    <path fill-rule="evenodd" d="M8 3a5 5 0 1 0 4.546 2.914.5.5 0 0 1 .908-.417A6 6 0 1 1 8 2v1z"/>
+                    <path d="M8 4.466V.534a.25.25 0 0 1 .41-.192l2.36 1.966c.12.1.12.284 0 .384L8.41 4.658A.25.25 0 0 1 8 4.466z"/>
+                </svg>
+                刷新
+            </button>
+        </div>
+    </header>
+
+    <!-- 主布局 -->
+    <div class="main-layout">
+        <!-- 左侧：摄像头树形列表 -->
+        <aside class="sidebar">
+            <div class="sidebar-header">
+                <h3>摄像头列表</h3>
+                <div class="sort-controls">
+                    <button id="sortByIp" class="sort-btn active" title="按IP排序">
+                        <svg width="14" height="14" fill="currentColor" viewBox="0 0 16 16">
+                            <path d="M3.5 3.5a.5.5 0 0 0-1 0v8.793l-1.146-1.147a.5.5 0 0 0-.708.708l2 1.999.007.007a.497.497 0 0 0 .7-.006l2-2a.5.5 0 0 0-.707-.708L3.5 12.293V3.5zm4 .5a.5.5 0 0 1 .5-.5h7a.5.5 0 0 1 0 1h-7a.5.5 0 0 1-.5-.5zM7.5 6a.5.5 0 0 0 0 1h5a.5.5 0 0 0 0-1h-5zm0 3a.5.5 0 0 0 0 1h3a.5.5 0 0 0 0-1h-3zm0 3a.5.5 0 0 0 0 1h1a.5.5 0 0 0 0-1h-1z"/>
+                        </svg>
+                        IP
+                    </button>
+                    <button id="sortByName" class="sort-btn" title="按名称排序">
+                        <svg width="14" height="14" fill="currentColor" viewBox="0 0 16 16">
+                            <path d="M14.5 3a.5.5 0 0 1 .5.5v9a.5.5 0 0 1-.5.5h-13a.5.5 0 0 1-.5-.5v-9a.5.5 0 0 1 .5-.5h13zm-13-1A1.5 1.5 0 0 0 0 3.5v9A1.5 1.5 0 0 0 1.5 14h13a1.5 1.5 0 0 0 1.5-1.5v-9A1.5 1.5 0 0 0 14.5 2h-13z"/>
+                            <path d="M3 5.5a.5.5 0 0 1 .5-.5h5a.5.5 0 0 1 0 1h-5a.5.5 0 0 1-.5-.5zm0 3a.5.5 0 0 1 .5-.5h5a.5.5 0 0 1 0 1h-5a.5.5 0 0 1-.5-.5zm0 3a.5.5 0 0 1 .5-.5h5a.5.5 0 0 1 0 1h-5a.5.5 0 0 1-.5-.5z"/>
+                        </svg>
+                        名称
+                    </button>
+                </div>
+            </div>
+            <div class="tree-container" id="cameraTree">
+                <!-- 树形列表动态生成 -->
+            </div>
+        </aside>
+
+        <!-- 中间：视频显示区域 -->
+        <main class="video-area">
+            <!-- 5画面布局 -->
+            <div class="layout-5" id="videoLayout">
+                <!-- 主窗口 -->
+                <div class="video-slot main-slot" data-slot="main" id="slot-main">
+                    <div class="slot-header">
+                        <div class="slot-header-left">
+                            <span class="slot-title">主窗口</span>
+                            <span class="slot-camera-name" id="slot-main-name">未分配</span>
+                        </div>
+                    </div>
+                    <div class="slot-content">
+                        <img class="video-stream" id="stream-main" alt="主窗口">
+                        <div class="slot-placeholder" id="placeholder-main">
+                            <div class="placeholder-icon">📹</div>
+                            <p>拖拽摄像头到此处</p>
+                            <p class="placeholder-hint">或点击右上角按钮分配</p>
+                        </div>
+                        <div class="slot-overlay">
+                            <div class="slot-controls">
+                                <button class="slot-control-btn assign-btn" data-slot="main" title="分配摄像头">➕</button>
+                                <button class="slot-control-btn maximize-btn" data-slot="main" title="最大化">⛶</button>
+                                <button class="slot-control-btn screenshot-btn" data-slot="main" title="截屏">📷</button>
+                                <button class="slot-control-btn clear-slot-btn" data-slot="main" title="清除">✕</button>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="slot-status" id="status-main">
+                        <span class="status-dot"></span>
+                        <span class="status-text">离线</span>
+                    </div>
+                </div>
+
+                <!-- 4个副窗口 -->
+                <div class="video-slot sub-slot" data-slot="sub1" id="slot-sub1">
+                    <div class="slot-header">
+                        <div class="slot-header-left">
+                            <span class="slot-title">窗口 1</span>
+                            <span class="slot-camera-name" id="slot-sub1-name">未分配</span>
+                        </div>
+                    </div>
+                    <div class="slot-content">
+                        <img class="video-stream" id="stream-sub1" alt="窗口1">
+                        <div class="slot-placeholder" id="placeholder-sub1">
+                            <div class="placeholder-icon">📹</div>
+                            <p>拖拽分配</p>
+                        </div>
+                        <div class="slot-overlay">
+                            <div class="slot-controls">
+                                <button class="slot-control-btn assign-btn" data-slot="sub1" title="分配摄像头">➕</button>
+                                <button class="slot-control-btn maximize-btn" data-slot="sub1" title="最大化">⛶</button>
+                                <button class="slot-control-btn screenshot-btn" data-slot="sub1" title="截屏">📷</button>
+                                <button class="slot-control-btn clear-slot-btn" data-slot="sub1" title="清除">✕</button>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="slot-status" id="status-sub1">
+                        <span class="status-dot"></span>
+                        <span class="status-text">离线</span>
+                    </div>
+                </div>
+
+                <div class="video-slot sub-slot" data-slot="sub2" id="slot-sub2">
+                    <div class="slot-header">
+                        <div class="slot-header-left">
+                            <span class="slot-title">窗口 2</span>
+                            <span class="slot-camera-name" id="slot-sub2-name">未分配</span>
+                        </div>
+                    </div>
+                    <div class="slot-content">
+                        <img class="video-stream" id="stream-sub2" alt="窗口2">
+                        <div class="slot-placeholder" id="placeholder-sub2">
+                            <div class="placeholder-icon">📹</div>
+                            <p>拖拽分配</p>
+                        </div>
+                        <div class="slot-overlay">
+                            <div class="slot-controls">
+                                <button class="slot-control-btn assign-btn" data-slot="sub2" title="分配摄像头">➕</button>
+                                <button class="slot-control-btn maximize-btn" data-slot="sub2" title="最大化">⛶</button>
+                                <button class="slot-control-btn screenshot-btn" data-slot="sub2" title="截屏">📷</button>
+                                <button class="slot-control-btn clear-slot-btn" data-slot="sub2" title="清除">✕</button>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="slot-status" id="status-sub2">
+                        <span class="status-dot"></span>
+                        <span class="status-text">离线</span>
+                    </div>
+                </div>
+
+                <div class="video-slot sub-slot" data-slot="sub3" id="slot-sub3">
+                    <div class="slot-header">
+                        <div class="slot-header-left">
+                            <span class="slot-title">窗口 3</span>
+                            <span class="slot-camera-name" id="slot-sub3-name">未分配</span>
+                        </div>
+                    </div>
+                    <div class="slot-content">
+                        <img class="video-stream" id="stream-sub3" alt="窗口3">
+                        <div class="slot-placeholder" id="placeholder-sub3">
+                            <div class="placeholder-icon">📹</div>
+                            <p>拖拽分配</p>
+                        </div>
+                        <div class="slot-overlay">
+                            <div class="slot-controls">
+                                <button class="slot-control-btn assign-btn" data-slot="sub3" title="分配摄像头">➕</button>
+                                <button class="slot-control-btn maximize-btn" data-slot="sub3" title="最大化">⛶</button>
+                                <button class="slot-control-btn screenshot-btn" data-slot="sub3" title="截屏">📷</button>
+                                <button class="slot-control-btn clear-slot-btn" data-slot="sub3" title="清除">✕</button>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="slot-status" id="status-sub3">
+                        <span class="status-dot"></span>
+                        <span class="status-text">离线</span>
+                    </div>
+                </div>
+
+                <div class="video-slot sub-slot" data-slot="sub4" id="slot-sub4">
+                    <div class="slot-header">
+                        <div class="slot-header-left">
+                            <span class="slot-title">窗口 4</span>
+                            <span class="slot-camera-name" id="slot-sub4-name">未分配</span>
+                        </div>
+                    </div>
+                    <div class="slot-content">
+                        <img class="video-stream" id="stream-sub4" alt="窗口4">
+                        <div class="slot-placeholder" id="placeholder-sub4">
+                            <div class="placeholder-icon">📹</div>
+                            <p>拖拽分配</p>
+                        </div>
+                        <div class="slot-overlay">
+                            <div class="slot-controls">
+                                <button class="slot-control-btn assign-btn" data-slot="sub4" title="分配摄像头">➕</button>
+                                <button class="slot-control-btn maximize-btn" data-slot="sub4" title="最大化">⛶</button>
+                                <button class="slot-control-btn screenshot-btn" data-slot="sub4" title="截屏">📷</button>
+                                <button class="slot-control-btn clear-slot-btn" data-slot="sub4" title="清除">✕</button>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="slot-status" id="status-sub4">
+                        <span class="status-dot"></span>
+                        <span class="status-text">离线</span>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- 扫描结果模态框 -->
+    <div class="modal-overlay" id="scanModal">
+        <div class="modal modal-lg">
+            <div class="modal-header">
+                <h2>网络扫描结果</h2>
+                <button class="modal-close">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="scan-progress" id="scanProgressArea">
+                    <div class="spinner"></div>
+                    <p id="scanStatusText">正在扫描...</p>
+                    <div class="progress-bar">
+                        <div class="progress-fill" id="scanProgressBar"></div>
+                    </div>
+                    <p class="progress-text" id="scanProgressText"></p>
+                </div>
+                <div class="camera-list" id="scanResults" style="display:none;"></div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary modal-cancel">关闭</button>
+                <button class="btn btn-primary" id="addAllBtn" style="display:none;">添加全部</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 添加摄像头模态框 -->
+    <div class="modal-overlay" id="addCameraModal">
+        <div class="modal">
+            <div class="modal-header">
+                <h2>手动添加摄像头</h2>
+                <button class="modal-close">&times;</button>
+            </div>
+            <div class="modal-body">
+                <form id="addCameraForm">
+                    <div class="form-group">
+                        <label>摄像头名称</label>
+                        <input type="text" name="name" class="form-control" placeholder="例如：门口摄像头" required>
+                    </div>
+                    <div class="form-group">
+                        <label>RTSP 地址</label>
+                        <input type="text" name="rtsp_url" class="form-control" placeholder="rtsp://admin:password@192.168.1.100:554/stream1" required>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group half">
+                            <label>用户名</label>
+                            <input type="text" name="username" class="form-control" placeholder="admin">
+                        </div>
+                        <div class="form-group half">
+                            <label>密码</label>
+                            <input type="password" name="password" class="form-control" placeholder="">
+                        </div>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary modal-cancel">取消</button>
+                <button class="btn btn-primary" id="saveCameraBtn">添加</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 分配摄像头模态框 -->
+    <div class="modal-overlay" id="assignCameraModal">
+        <div class="modal">
+            <div class="modal-header">
+                <h2>选择摄像头</h2>
+                <button class="modal-close">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div id="assignCameraList" class="camera-list">
+                    <!-- 动态生成摄像头列表 -->
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary modal-cancel">取消</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 右键菜单 -->
+    <div class="context-menu" id="contextMenu">
+        <div class="context-item" data-action="assign-main">分配到主窗口</div>
+        <div class="context-item" data-action="assign-sub1">分配到窗口 1</div>
+        <div class="context-item" data-action="assign-sub2">分配到窗口 2</div>
+        <div class="context-item" data-action="assign-sub3">分配到窗口 3</div>
+        <div class="context-item" data-action="assign-sub4">分配到窗口 4</div>
+        <div class="context-divider"></div>
+        <div class="context-item" data-action="remove">移除摄像头</div>
+    </div>
+
+    <!-- Toast通知 -->
+    <div class="toast-container" id="toastContainer"></div>
+
+    <script src="/static/js/app.js?v=1772015929"></script>
+</body>
+</html>
