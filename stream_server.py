@@ -22,6 +22,7 @@ class CameraStream:
         self.config = config
         
         self.cap: Optional[cv2.VideoCapture] = None
+        self.cap_lock = threading.Lock()  # 保护 cv2.VideoCapture 的线程安全锁
         self.is_running = False
         self.is_connected = False
         self.frame: Optional[np.ndarray] = None
@@ -47,24 +48,22 @@ class CameraStream:
         
         try:
             # 配置FFmpeg参数以优化延迟
-            # -fflags nobuffer: 禁用缓冲
-            # -flags low_delay: 低延迟标志
-            # -probesize 32: 减小探测大小
-            # -analyzeduration 0: 不分析时长
-            
-            self.cap = cv2.VideoCapture(self.rtsp_url, cv2.CAP_FFMPEG)
-            
-            # 设置缓冲区大小为最小
-            self.cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
-            
-            # 设置超时
-            timeout_ms = self.config.get('connection_timeout', 10) * 1000
-            self.cap.set(cv2.CAP_PROP_OPEN_TIMEOUT_MSEC, timeout_ms)
-            self.cap.set(cv2.CAP_PROP_READ_TIMEOUT_MSEC, 3000)
-            
-            if not self.cap.isOpened():
-                print(f"[Stream {self.camera_id}] 无法打开RTSP流: {self.rtsp_url}")
-                return False
+            with self.cap_lock:
+                self.cap = cv2.VideoCapture(self.rtsp_url, cv2.CAP_FFMPEG)
+                
+                # 设置缓冲区大小为最小
+                self.cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
+                
+                # 设置超时
+                timeout_ms = self.config.get('connection_timeout', 10) * 1000
+                self.cap.set(cv2.CAP_PROP_OPEN_TIMEOUT_MSEC, timeout_ms)
+                self.cap.set(cv2.CAP_PROP_READ_TIMEOUT_MSEC, 3000)
+                
+                if not self.cap.isOpened():
+                    print(f"[Stream {self.camera_id}] 无法打开RTSP流: {self.rtsp_url}")
+                    self.cap.release()
+                    self.cap = None
+                    return False
             
             self.is_running = True
             self.capture_thread = threading.Thread(target=self._capture_loop, daemon=True)
@@ -95,7 +94,15 @@ class CameraStream:
         
         while self.is_running:
             try:
-                if self.cap is None or not self.cap.isOpened():
+                # 在持有 cap_lock 的情况下读取帧，防止 stop/reconnect 并发释放
+                with self.cap_lock:
+                    if self.cap is None or not self.cap.isOpened():
+                        cap_ok = False
+                    else:
+                        ret, frame = self.cap.read()
+                        cap_ok = True
+                
+                if not cap_ok:
                     consecutive_errors += 1
                     if consecutive_errors >= max_consecutive_errors:
                         print(f"[Stream {self.camera_id}] 连接断开，尝试重连...")
@@ -103,8 +110,6 @@ class CameraStream:
                         consecutive_errors = 0
                     time.sleep(0.5)
                     continue
-                
-                ret, frame = self.cap.read()
                 
                 if not ret or frame is None:
                     consecutive_errors += 1
@@ -142,11 +147,13 @@ class CameraStream:
     def _reconnect(self):
         """重新连接"""
         try:
-            if self.cap:
-                self.cap.release()
-            
-            self.cap = cv2.VideoCapture(self.rtsp_url, cv2.CAP_FFMPEG)
-            self.cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
+            with self.cap_lock:
+                if self.cap:
+                    self.cap.release()
+                    self.cap = None
+                
+                self.cap = cv2.VideoCapture(self.rtsp_url, cv2.CAP_FFMPEG)
+                self.cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
             print(f"[Stream {self.camera_id}] 重连完成")
         except Exception as e:
             print(f"[Stream {self.camera_id}] 重连失败: {e}")
@@ -166,9 +173,6 @@ class CameraStream:
         
         if quality is None:
             quality = self.config.get('jpeg_quality', 70)
-        
-        # 调整大小以减少带宽（可选）
-        # frame = cv2.resize(frame, (1280, 720))
         
         encode_params = [cv2.IMWRITE_JPEG_QUALITY, quality]
         ret, jpeg = cv2.imencode('.jpg', frame, encode_params)
@@ -196,9 +200,12 @@ class CameraStream:
         """停止视频流"""
         self.is_running = False
         if self.capture_thread:
-            self.capture_thread.join(timeout=2)
-        if self.cap:
-            self.cap.release()
+            self.capture_thread.join(timeout=3)
+        # 捕获线程退出后再释放，保证不会与 cap.read() 并发
+        with self.cap_lock:
+            if self.cap:
+                self.cap.release()
+                self.cap = None
         print(f"[Stream {self.camera_id}] 已停止")
 
 
