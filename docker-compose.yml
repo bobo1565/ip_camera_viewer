@@ -1,0 +1,16 @@
+
+
+services:
+  ip_camera_viewer:
+    build: .
+    container_name: ip_camera_viewer
+    restart: unless-stopped
+    # Use host network to allow the ONVIF discovery to broadcast correctly on Linux
+    # network_mode: "host" 
+    ports:
+      - "8080:5001"
+    volumes:
+      - ./cameras_db.json:/app/cameras_db.json
+      - ./config.json:/app/config.json
+    environment:
+      - TZ=Asia/Shanghai
